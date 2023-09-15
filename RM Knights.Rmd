@@ -1,0 +1,234 @@
+---
+title: "Recognition Memory"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+library(tidyverse)
+library(afex)
+library(BayesFactor)
+library(apa)
+load("UNM03_proc_data (1).rdata")
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Design
+
+28 subjects were used. Experiment consisted in 3 training phases, followed by a test phase. In training, for a total of 16 blocks, 4 different types of cue1, 4 different types of cue2, and 2 outcomes were presented. The image dispalyed in each type of cue was randomly asigned for each participant. Both phase 1 and 2 comprised 2 blocks, whereas phase 3 consisted on 12 blocks. All blocks were a sequence of 10 trials. In each trial, a cue1 and a cue2 were presented, followed by an outcome. In phase 1, there were 2 types of cue1 (1 and 2) and 2 types of cue2 (5 and 6), thus creating 4 different combinations that were repeated 5 times across the phase (those that were presented 2 times in the first block were presented 3 in the second and vice versa). Cue 1 was always paired with outcome 1 (10 times total) and cue 2 was always paired with outcome 2, whereas cues 5 and 6 where paired with each outcome half of the times. In phase 2 there were 2 different types of cue1 (3 and 4) and 2 types of cue2 (7 and 8), thus creating 4 different combinations that were repeated 5 times across the phase (those that were presented 2 times in the first block were presented 3 in the second and vice versa). Cue 3 was paired with outcome 1 with a 0.8 contingency, being the rest of trials paired with outcome 2. The opposite was true for cue 4 (note that the distribution across blocks is uneven), and cues 7 and 8 where paired with each outcome half of the times. In phase 3, the stimuli combinations from the two previous phases were intermixed, so each combination was presented 15 times (again, blocks were uneven). The contingencies between cues and outcomes where maintained as in the previous phases. In this training phase, on each trial, the participants had to predict the probable outcome of the cues presented, and the response given as well as the reaction time (RT) were recorded. Based on the programmed contingencies, an additional measure of accuracy was computed, comparing the most probable outcome (that is, the outcome with a higher contingency with cue1) with the response emitted by the participant.
+
+In test phase, the participants were presented each of the 8 cues twice, together with a similar yet new cue, and where asked to choose what cue they had seen before, as well as rating how sure they were of their response. The rating RT was also recorded. A memory score was computed, taking the rating given to the cue in positive when the response was right, and in negative when it was wrong.
+
++--------------+-------------------------+------------------------+--------------+
+| Phase 1      | Phase 2                 | Phase 3                | Test         |
++:============:+:=======================:+:======================:+:============:+
+| AX - O1      | 0.8CW - O1 / 0.2CW - O2 | Phases 1 &2 intermixed | A\           |
+|              |                         |                        | B\           |
+| AY - O1      | 0.8CZ - O1 / 0.2CZ - O2 |                        | C\           |
+|              |                         |                        | D\           |
+| BX - O2      | 0.8DW - O2 / 0.2DW - O1 |                        | X\           |
+|              |                         |                        | Y\           |
+| BY - O2      | 0.8DZ - O2 / 0.2DZ - O1 |                        | W\           |
+|              |                         |                        | Z            |
++--------------+-------------------------+------------------------+--------------+
+
+# Results
+
+## Training phase
+
+As can be seen in the Figure below, the accuracy to the certain cues increased during phase 1, but it seems to decrease again at the start of phase 3, then gradually increasing to reach a value of around 0.85 at the end of training. The accuracy to uncertain cues, although not as better as for the certain groups, increases throughout the training phase, reaching a level of around 0.7 at the end of it.
+
+```{r, include=FALSE}
+#create phases dataframes
+
+#change -99 values for NA
+data["prob_response"][data["prob_response"] == -99] <- NA
+data["RT"][data["RT"] == -99] <- NA
+
+#prepare data
+data <- mutate(data, 
+               cue_type = case_when(cue1 == 1 | cue1 == 2 ~ "certain",
+  cue1 == 3 | cue1 == 4 ~ "uncertain"))
+MA_training <- data %>%
+  group_by(phase, cue_type, block) %>%
+  summarise(mean_accuracy = mean(prob_response, na.rm = TRUE), 
+            sd_accuracy = sd(prob_response, na.rm = TRUE)/sqrt(length(prob_response)))
+```
+
+```{r}
+#plot accuracy
+ggplot(MA_training, mapping = aes(x = block, y = mean_accuracy, color = cue_type)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(x= block, y = mean_accuracy, ymin = mean_accuracy-sd_accuracy, ymax = mean_accuracy+sd_accuracy), color = "black", width=.1,position=position_dodge(0.05)) +
+  facet_grid(cols = vars(phase), space = "free_x", scales = "free_x") + 
+  scale_x_continuous(breaks = c(seq (1, 16, 1))) +
+  scale_y_continuous(name="Accuracy", limits=c(0.45, 1)) +
+  labs(title = "Figure 1", subtitle = "Mean corrected accuracy for the 16 block of the three phases of training")
+```
+
+```{r, include = FALSE}
+phase1 <- filter(data, phase == 1)
+phase2 <- filter(data, phase == 2)
+phase3 <- filter(data, phase == 3)
+
+#t-test >.5
+mean_phase1 <- phase1 %>%
+  group_by(pNum) %>%
+   summarise(mean_response = mean(prob_response, na.rm = TRUE))
+t.test(mean_phase1, mu = .5, alternative = "greater") #p-value = 0.0002108
+
+mean_phase2 <- phase2 %>%
+  group_by(pNum) %>%
+   summarise(mean_response = mean(prob_response, na.rm = TRUE))
+t.test(mean_phase2, mu = .5, alternative = "greater") #p-value = 0.0002744
+
+mean_cert_phase3 <- filter(phase3, cue_type == "certain") %>%
+  group_by(pNum) %>%
+   summarise(mean_response = mean(prob_response, na.rm = TRUE))
+t.test(mean_cert_phase3, mu = .5, alternative = "greater") #p-value = 0.0001973
+
+mean_uncert_phase3 <- filter(phase3, cue_type == "uncertain") %>%
+  group_by(pNum) %>%
+   summarise(mean_response = mean(prob_response, na.rm = TRUE))
+t.test(mean_uncert_phase3, mu = .5, alternative = "greater") #p-value = 0.0002451
+
+#ANOVA phase 1
+response_phase1 <- phase1 %>%
+  group_by (pNum, block) %>%
+  summarise(mean_response = mean(prob_response, na.rm = TRUE))
+#now set block as a factor
+response_phase1$block <- factor(response_phase1$block)
+response_phase1$pNum <- factor(response_phase1$pNum)
+#now one between subjects ANOVA
+ANOVA_p1_resp <-  aov_car(formula = mean_response ~ Error(pNum/block), data = response_phase1)
+bay_ANOVA_p1_resp <- anovaBF(formula = mean_response ~ block + pNum,
+        data = data.frame(response_phase1),
+        whichRandom = "pNum")
+
+#ANOVA for phase 2
+response_phase2 <- phase2 %>%
+  group_by (pNum, block) %>%
+  summarise(mean_response = mean(prob_response, na.rm = TRUE))
+response_phase2$block <- factor(response_phase2$block)
+response_phase2$pNum <- factor(response_phase2$pNum)
+ANOVA_p2_resp <- aov_car(formula = mean_response ~ Error(pNum/block), data = response_phase2)
+bay_ANOVA_p2_resp <- anovaBF(formula = mean_response ~ block + pNum,
+        data = data.frame(response_phase2),
+        whichRandom = "pNum")
+
+#ANOVA for phase 3
+#two within-subject factors ANOVA for phase 3
+response_phase3 <- phase3 %>%
+  group_by (pNum, block, cue_type) %>%
+  summarise(mean_response = mean(prob_response, na.rm = TRUE))
+response_phase3$block <- factor(response_phase3$block)
+response_phase3$cue_type <- factor(response_phase3$cue_type)
+response_phase3$pNum <- factor(response_phase3$pNum)
+ANOVA_p3_resp <- aov_car(formula = mean_response ~ Error(pNum/block*cue_type), data = response_phase3)
+bay_ANOVA_p3_resp <- anovaBF(formula = mean_response ~ block*cue_type + pNum,
+        data = data.frame(response_phase3),
+        whichRandom = "pNum")
+#it prints a warning message that participant 1 and 7 have been removed because some cells are missing
+#let's modify the data so we can perform the analysis with all the subjects, by shuffling blocks 7 & 8 for participant 1, and block 8 & 9, 
+corrected_phase3 <-  mutate(phase3, 
+               twoblocks = case_when(block == 5 | block == 6 ~ 1,
+                                    block == 7 | block == 8 ~ 2,
+                                    block == 9 | block == 10 ~ 3,
+                                    block == 11 | block == 12 ~ 4,
+                                    block == 13 | block == 14 ~ 5,
+                                    block == 15 | block == 16 ~ 6,))
+#now anova on that
+c_response_phase3 <- corrected_phase3 %>%
+  group_by (pNum, twoblocks, cue_type) %>%
+  summarise(mean_response = mean(prob_response, na.rm = TRUE))
+c_response_phase3$twoblocks <- factor(c_response_phase3$twoblocks)
+c_response_phase3$cue_type <- factor(c_response_phase3$cue_type)
+c_response_phase3$pNum <- factor(c_response_phase3$pNum)
+c_ANOVA_p3_resp <- aov_car(formula = mean_response ~ Error(pNum/twoblocks*cue_type), data = c_response_phase3)
+c_bay_ANOVA_p3_resp <- anovaBF(formula = mean_response ~ twoblocks*cue_type + pNum,
+        data = data.frame(c_response_phase3),
+        whichRandom = "pNum")
+# Calculate interaction Bayes Factor
+c_bay_ANOVA_p3_resp[4] / c_bay_ANOVA_p3_resp[3]
+```
+
+A within-subject ANOVA for phase 1 showed a significant effect of the block (`r apa(ANOVA_p1_resp, effect = "block", format = "rmarkdown")`), for which anecdotal evidence was found (*BF* = 2.424072 ±1.18%). This indicated that the accuracy to certain cues increased from block 1 to block 2. However, the results of the ANOVA for phase 2 indicated that the main effect of the block was non significant (`r apa(ANOVA_p2_resp, effect = "block", format = "rmarkdown")`), again finding anecdotal evidence against this effect (*BF* = 0.4342845 ±1.62%), which can be interpreted as no increase in the accuracy as phase 2 progressed. For phase 3, ANOVA was performed for the type of cue and the progression of time was measured in chucks of two blocks. This ANOVA found that only the main effect of the blocks was significant (Blocks: `r apa(c_ANOVA_p3_resp, effect = "twoblocks", format = "rmarkdown")`, Cue type: `r apa(c_ANOVA_p3_resp, effect = "cue_type", format = "rmarkdown")`, Interaction:`r apa(c_ANOVA_p3_resp, effect = "twoblocks:cue_type", format = "rmarkdown")`).The evidence found in favor of the blocks effect was moderate (*BF* = 6.864091 ±0.44%), but strong evidence was found for the type of cue effect (*BF* = 13.10668 ±1.28%) even when this effect was non significant according to the traditional analysis for a confidence level of 0.95. Regarding the interaction, moderate evidence against its effect was found (*BF* = 0.287357 ±1.52%).
+
+## Test phase
+
+In the figure below, it can be seen that the memory score was lower for the certain non-predictive and the uncertain predictive cues (around 5) than for the uncertain non-predictive and the certain predictive cues (around 7). 
+
+```{r}
+#prepare data
+Mmem_test <- test_data %>%
+  group_by(cue_type) %>%
+  summarise(mean_mem_score = mean(mem_score, na.rm = TRUE), 
+            sd_mem_score = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
+
+#plot in a histogram
+ggplot(data = Mmem_test) +
+  geom_col(mapping = aes(x = cue_type, y = mean_mem_score)) +
+  geom_errorbar(aes(x = cue_type, y= mean_mem_score, ymin = mean_mem_score - sd_mem_score, ymax = mean_mem_score + sd_mem_score)) +
+  coord_cartesian(ylim = c(0, 10))+
+  scale_x_discrete (name = "Type of cue") +
+  scale_y_continuous(name = "Memory score") +
+  labs(title = "Figure 2", subtitle = "Mean memory score for each type of cue in test phase")
+```
+
+```{r, include = FALSE}
+#The factors would be the type of cue and the participant, the DV being the memory score. Also, as there are various scores for each cue I would just make a mean for them. 
+test_data <-  mutate(test_data, 
+               certainty = case_when(cue_type == "C_NP" | cue_type == "C_P" ~ "certain",
+                                    cue_type == "U_NP" | cue_type == "U_P" ~ "uncertain"),
+               predictiveness = case_when(cue_type == "U_P" | cue_type == "C_P" ~ "predictive",
+                                    cue_type == "U_NP" | cue_type == "C_NP" ~ "nonpreditive"))
+mem_mean_parti <- test_data %>%
+  group_by (pNum, certainty, predictiveness) %>%
+  summarise(mem_score = mean(mem_score, na.rm = TRUE))
+#now factorize the IV
+mem_mean_parti$pNum <- factor(mem_mean_parti$pNum)
+mem_mean_parti$certainty <- factor(mem_mean_parti$certainty)
+mem_mean_parti$predictiveness <- factor(mem_mean_parti$predictiveness)
+#ANOVA one between subjects factor (cue_type) on DV mem_score
+mem_score_test_ANOVA <- aov_car(formula = mem_score ~ Error(pNum/certainty*predictiveness), data = mem_mean_parti)
+b_mem_score_AVOVA <- anovaBF(formula = mem_score ~ certainty*predictiveness + pNum,
+        data = data.frame(mem_mean_parti),
+        whichRandom = "pNum")
+# Calculate interaction Bayes Factor
+b_mem_score_AVOVA[4] / b_mem_score_AVOVA[3]
+
+```
+
+However, in regard to the ANOVA, no effect or interaction were significant effects of the certainty and predictiveness of the cue, although the interaction failed to reach significance (Certainty: `r apa(mem_score_test_ANOVA, effect = "certainty")`, Predicitiveness: `r apa(mem_score_test_ANOVA, effect = "predictiveness")`,CertaintyxPredictiveness: `r apa(mem_score_test_ANOVA, effect = "certainty:predictiveness")`, respectively). There was anecdotal evidence against the main effects and the interaction (*BF* =  0.2747429  ±1.15%, *BF* = 0.2959972  ±1.74%), but anecdotal in favor of the interaction (*BF* = 1.885756 ±2.6%). Given these analysis, there is not enough evidence in favor or against the effect of the manipulations performed in these experiment. 
+
+Let's analyse only with the correct responses in the memory score.
+```{r}
+c_Mmem_test <- filter(test_data, mem_score > -1) %>%
+  group_by(cue_type) %>%
+  summarise(mean_mem_score = mean(mem_score, na.rm = TRUE), 
+           sd_mem_score = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
+ggplot(data = c_Mmem_test) +
+  geom_col(mapping = aes(x = cue_type, y = mean_mem_score)) +
+  geom_errorbar(aes(x = cue_type, y= mean_mem_score, ymin = mean_mem_score - sd_mem_score, ymax = mean_mem_score + sd_mem_score)) +
+  coord_cartesian(ylim = c(0, 10))+
+  scale_x_discrete (name = "Type of cue") +
+  scale_y_continuous(name = "Positive memory score") +
+  labs(title = "Figure 2", subtitle = "Mean memory score for each type of cue in test phase for correct answers")
+
+#Analysis
+c_mem_mean_parti <- filter(test_data, mem_score > -1) %>%
+  group_by (pNum, certainty, predictiveness) %>%
+  summarise(mem_score = mean(mem_score, na.rm = TRUE))
+#now factorize the IV
+c_mem_mean_parti$pNum <- factor(c_mem_mean_parti$pNum)
+c_mem_mean_parti$certainty <- factor(c_mem_mean_parti$certainty)
+c_mem_mean_parti$predictiveness <- factor(c_mem_mean_parti$predictiveness)
+#ANOVA one between subjects factor (cue_type) on DV mem_score
+c_mem_score_test_ANOVA <- aov_car(formula = mem_score ~ Error(pNum/certainty*predictiveness), data = c_mem_mean_parti)
+b_mem_score_AVOVA <- anovaBF(formula = mem_score ~ certainty*predictiveness + pNum,
+        data = data.frame(c_mem_mean_parti),
+        whichRandom = "pNum")
+# Calculate interaction Bayes Factor
+b_mem_score_AVOVA[4] / b_mem_score_AVOVA[3]
+```
+However, in the knights there are no significant effects, all the bayesian evidence is either moderate or anecdotal towards null. 
