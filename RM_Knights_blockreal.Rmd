@@ -85,7 +85,7 @@ ggplot(MA_training, mapping = aes(x = block_real, y = mean_accuracy, color = cue
   facet_grid(cols = vars(phase), space = "free_x", scales = "free_x") + 
   scale_x_continuous(breaks = c(seq (1, 16, 1))) +
   scale_y_continuous(name="Accuracy", limits=c(0.45, 1)) +
-  labs(title = "Mean corrected accuracy for the 8 blocks of the three phases of training")
+  labs(title = "Mean corrected accuracy for the three phases of training")
 ```
 
 ```{r, include = FALSE}
@@ -124,20 +124,25 @@ bay_ANOVA_p3_int <- bay_ANOVA_p3_resp[4]/bay_ANOVA_p3_resp[3]
 A within-subject ANOVA for phase 3 with the type of cue (certain or uncertain) and the blocks was performed. This ANOVA found the main effect of the type of cue and of the blocks significant(`r apa(ANOVA_p3_resp, effect = "cue_type", format = "rmarkdown")`), whereas the main effect of the block and interaction were non significant (`r apa(ANOVA_p3_resp, effect = "block_real")`; `r apa(ANOVA_p3_resp, effect = "block_real:cue_type", format = "rmarkdown")`). There was strong evidence on the effect of the type of cue (`r report_BF_and_error(bay_ANOVA_p3_resp[2])`), moderate evidence in favor of the effect of block (`r report_BF_and_error(bay_ANOVA_p3_resp[1])`) and that there was moderate evidence of the non significance of the interaction (`r report_BF_and_error(bay_ANOVA_p3_int[1])`).
 
 ## Test phase
-### Mmeory score
+### Memory score
 
 In the figure below, it can be seen that the memory score was lower for the certain non-predictive and the uncertain predictive cues (around 5) than for the uncertain non-predictive and the certain predictive cues (around 7). 
 
 ```{r}
 #prepare data
+test_data <-  mutate(test_data, 
+               certainty = case_when(cue_type == "C_NP" | cue_type == "C_P" ~ "certain",
+                                    cue_type == "U_NP" | cue_type == "U_P" ~ "uncertain"),
+               predictiveness = case_when(cue_type == "U_P" | cue_type == "C_P" ~ "predictive",
+                                    cue_type == "U_NP" | cue_type == "C_NP" ~ "nonpreditive"))
 Mmem_test <- test_data %>%
-  group_by(cue_type) %>%
+  group_by(cue_type, certainty) %>%
   summarise(mean_mem_score = mean(mem_score, na.rm = TRUE), 
             sd_mem_score = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
 
 #plot in a histogram
 ggplot(data = Mmem_test) +
-  geom_col(mapping = aes(x = cue_type, y = mean_mem_score)) +
+  geom_col(mapping = aes(x = cue_type, y = mean_mem_score, fill = certainty)) +
   geom_errorbar(aes(x = cue_type, y= mean_mem_score, ymin = mean_mem_score - sd_mem_score, ymax = mean_mem_score + sd_mem_score)) +
   coord_cartesian(ylim = c(0, 10))+
   scale_x_discrete (name = "Type of cue") +
@@ -147,11 +152,7 @@ ggplot(data = Mmem_test) +
 
 ```{r, include = FALSE}
 #The factors would be the type of cue and the participant, the DV being the memory score. Also, as there are various scores for each cue I would just make a mean for them. 
-test_data <-  mutate(test_data, 
-               certainty = case_when(cue_type == "C_NP" | cue_type == "C_P" ~ "certain",
-                                    cue_type == "U_NP" | cue_type == "U_P" ~ "uncertain"),
-               predictiveness = case_when(cue_type == "U_P" | cue_type == "C_P" ~ "predictive",
-                                    cue_type == "U_NP" | cue_type == "C_NP" ~ "nonpreditive"))
+
 mem_mean_parti <- test_data %>%
   group_by (pNum, certainty, predictiveness) %>%
   summarise(mem_score = mean(mem_score, na.rm = TRUE))
@@ -174,18 +175,18 @@ However, in regard to the ANOVA, no effect or interaction were significant effec
 ### Corrected memory score
 ```{r}
 c_Mmem_test <- filter(test_data, mem_score > -1) %>%
-  group_by(cue_type) %>%
+  group_by(cue_type, certainty) %>%
   summarise(mean_mem_score = mean(mem_score, na.rm = TRUE), 
            sd_mem_score = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
 ```
 ```{r, echo = FALSE}
 ggplot(data = c_Mmem_test) +
-  geom_col(mapping = aes(x = cue_type, y = mean_mem_score)) +
+  geom_col(mapping = aes(x = cue_type, y = mean_mem_score, fill = certainty)) +
   geom_errorbar(aes(x = cue_type, y= mean_mem_score, ymin = mean_mem_score - sd_mem_score, ymax = mean_mem_score + sd_mem_score)) +
   coord_cartesian(ylim = c(0, 10))+
   scale_x_discrete (name = "Type of cue") +
   scale_y_continuous(name = "Positive memory score") +
-  labs(title = "Figure 2", subtitle = "Mean memory score for each type of cue in test phase for correct answers")
+  labs(title = "Mean corrected memory score for each type of cue in test")
 ```
 ```{r}
 #Analysis
