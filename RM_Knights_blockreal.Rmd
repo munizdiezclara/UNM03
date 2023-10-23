@@ -73,7 +73,7 @@ data <- mutate(data,
 MA_training <- data %>%
   group_by(phase, cue_type, block_real) %>%
   summarise(mean_accuracy = mean(prob_response, na.rm = TRUE), 
-            sd_accuracy = sd(prob_response, na.rm = TRUE)/sqrt(length(prob_response)))
+            se_accuracy = sd(prob_response, na.rm = TRUE)/sqrt(length(prob_response)))
 ```
 
 ```{r}
@@ -81,7 +81,7 @@ MA_training <- data %>%
 ggplot(MA_training, mapping = aes(x = block_real, y = mean_accuracy, color = cue_type)) +
   geom_point() +
   geom_line() +
-  geom_errorbar(aes(x= block_real, y = mean_accuracy, ymin = mean_accuracy-sd_accuracy, ymax = mean_accuracy+sd_accuracy), color = "black", width=.1,position=position_dodge(0.05)) +
+  geom_errorbar(aes(x= block_real, y = mean_accuracy, ymin = mean_accuracy-se_accuracy, ymax = mean_accuracy+se_accuracy), color = "black", width=.1,position=position_dodge(0.05)) +
   facet_grid(cols = vars(phase), space = "free_x", scales = "free_x") + 
   scale_x_continuous(breaks = c(seq (1, 16, 1))) +
   scale_y_continuous(name="Accuracy", limits=c(0.45, 1)) +
@@ -138,12 +138,12 @@ test_data <-  mutate(test_data,
 Mmem_test <- test_data %>%
   group_by(cue_type, certainty) %>%
   summarise(mean_mem_score = mean(mem_score, na.rm = TRUE), 
-            sd_mem_score = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
+            se_mem_score = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
 
 #plot in a histogram
 ggplot(data = Mmem_test) +
   geom_col(mapping = aes(x = cue_type, y = mean_mem_score, fill = certainty)) +
-  geom_errorbar(aes(x = cue_type, y= mean_mem_score, ymin = mean_mem_score - sd_mem_score, ymax = mean_mem_score + sd_mem_score)) +
+  geom_errorbar(aes(x = cue_type, y= mean_mem_score, ymin = mean_mem_score - se_mem_score, ymax = mean_mem_score + se_mem_score)) +
   coord_cartesian(ylim = c(0, 10))+
   scale_x_discrete (name = "Type of cue") +
   scale_y_continuous(name = "Memory score") +
@@ -162,27 +162,73 @@ mem_mean_parti$certainty <- factor(mem_mean_parti$certainty)
 mem_mean_parti$predictiveness <- factor(mem_mean_parti$predictiveness)
 #ANOVA one between subjects factor (cue_type) on DV mem_score
 mem_score_test_ANOVA <- aov_car(formula = mem_score ~ Error(pNum/certainty*predictiveness), data = mem_mean_parti)
+print(mem_score_test_ANOVA)
 b_mem_score_AVOVA <- anovaBF(formula = mem_score ~ certainty*predictiveness + pNum,
         data = data.frame(mem_mean_parti),
         whichRandom = "pNum")
+print(b_mem_score_AVOVA)
 # Calculate interaction Bayes Factor
-b_mem_score_AVOVA[4] / b_mem_score_AVOVA[3]
+b_mem_score_AVOVA_int <-  b_mem_score_AVOVA[4] / b_mem_score_AVOVA[3]
+print(b_mem_score_AVOVA_int)
 
 ```
 
-However, in regard to the ANOVA, no effect or interaction were significant effects of the certainty and predictiveness of the cue, although the interaction failed to reach significance (Certainty: `r apa(mem_score_test_ANOVA, effect = "certainty")`, Predicitiveness: `r apa(mem_score_test_ANOVA, effect = "predictiveness")`,CertaintyxPredictiveness: `r apa(mem_score_test_ANOVA, effect = "certainty:predictiveness")`, respectively). There was anecdotal evidence against the main effects and the interaction (*BF* =  0.2747429  ±1.15%, *BF* = 0.2959972  ±1.74%), but anecdotal in favor of the interaction (*BF* = 1.885756 ±2.6%). Given these analysis, there is not enough evidence in favor or against the effect of the manipulations performed in these experiment. 
+However, in regard to the ANOVA, no effect or interaction were significant (Certainty: `r apa(mem_score_test_ANOVA, effect = "certainty")`, Predicitiveness: `r apa(mem_score_test_ANOVA, effect = "predictiveness")`,CertaintyxPredictiveness: `r apa(mem_score_test_ANOVA, effect = "certainty:predictiveness")`, respectively). There was moderate evidence against the main effects and the interaction (`r report_BF_and_error(b_mem_score_AVOVA[1])`; `r report_BF_and_error(b_mem_score_AVOVA[2])`), but anecdotal in favor of the interaction (`r report_BF_and_error(b_mem_score_AVOVA_int[1])`). Given these analysis, there is not enough evidence in favor or against the effect of the manipulations performed in these experiment.
 
-### Corrected memory score
+### Corrected memory score (hits x1, errors x0)
+``` {r, include=FALSE}
+#Create the c_mem_score variable
+test_data <- test_data %>%
+  mutate(c_mem_score = case_when(acc == 1 ~ mem_score*1,
+                                acc == 0 ~ mem_score*0), .after = mem_score)
+
+#prepare data for plotting
+mean_c_mem_score <- test_data %>%
+  group_by(cue_type, certainty) %>%
+  summarise(mean_score = mean(c_mem_score, na.rm = TRUE),
+            se_score = sd(c_mem_score, na.rm = TRUE)/sqrt(length(c_mem_score)))
+```
+``` {r, echo=FALSE}
+ggplot(mean_c_mem_score) +
+  geom_col(mapping = aes(x = cue_type, y = mean_score, fill = certainty))+
+  geom_errorbar(mapping = aes(x = cue_type, y = mean_score, ymin = mean_score - se_score, ymax = mean_score + se_score))+
+  coord_cartesian(ylim = c(0,10))+
+  scale_x_discrete(name = "Type of cue") +
+  scale_y_continuous(name = "Corrected memory score")+
+  labs(title = "Mean corrected memory score for each type of cue")
+```
+```{r, include=FALSE}
+#prepare for ANOVA
+c_mem_score <- test_data %>%
+  group_by(pNum, predictiveness, certainty) %>%
+  summarise(mem_score = mean(c_mem_score, na.rm = TRUE))
+#factorise everything
+c_mem_score$pNum <-  factor(c_mem_score$pNum)
+c_mem_score$certainty <- factor(c_mem_score$certainty)
+c_mem_score$predictiveness <- factor(c_mem_score$predictiveness)
+#ANOVA
+c_mem_score_ANOVA <- aov_car(mem_score ~ Error(pNum*certainty*predictiveness), data = c_mem_score)
+print(c_mem_score_ANOVA)
+#bayesian ANOVA
+b_c_mem_score_ANOVA <- anovaBF(mem_score ~ certainty*predictiveness + pNum, data = c_mem_score, whichRandom = "pNum")
+print(b_c_mem_score_ANOVA)
+#bayesian interaction
+b_c_mem_score_ANOVA_int <- b_c_mem_score_ANOVA[4]/b_c_mem_score_ANOVA[3]
+print(b_c_mem_score_ANOVA_int)
+```
+A mixed method ANOVA found no significant effect of neither the Certainty or the Predictiveness, nor thetheir interaction. Furthermore, the bayesian evidence was moderate for the null hypothesis in the case of the main effects and anecdotal null for the interaction (Certainty: `r apa(c_mem_score_ANOVA, effect = "certainty")`, `r report_BF_and_error(b_c_mem_score_ANOVA[1])`; Predictiveness: `r apa(c_mem_score_ANOVA, effect = "predictiveness")`, , `r report_BF_and_error(b_c_mem_score_ANOVA[2])`; interaction: `r apa(c_mem_score_ANOVA, effect = "certainty:predictiveness")`, , `r report_BF_and_error(b_c_mem_score_ANOVA_int[1])`).
+
+### Corrected memory score (errors out)
 ```{r}
-c_Mmem_test <- filter(test_data, mem_score > -1) %>%
+c_Mmem_test <- filter(test_data, acc == 1) %>%
   group_by(cue_type, certainty) %>%
   summarise(mean_mem_score = mean(mem_score, na.rm = TRUE), 
-           sd_mem_score = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
+           se_mem_score = sd(mem_score, na.rm = TRUE)/sqrt(length(mem_score)))
 ```
 ```{r, echo = FALSE}
 ggplot(data = c_Mmem_test) +
   geom_col(mapping = aes(x = cue_type, y = mean_mem_score, fill = certainty)) +
-  geom_errorbar(aes(x = cue_type, y= mean_mem_score, ymin = mean_mem_score - sd_mem_score, ymax = mean_mem_score + sd_mem_score)) +
+  geom_errorbar(aes(x = cue_type, y= mean_mem_score, ymin = mean_mem_score - se_mem_score, ymax = mean_mem_score + se_mem_score)) +
   coord_cartesian(ylim = c(0, 10))+
   scale_x_discrete (name = "Type of cue") +
   scale_y_continuous(name = "Positive memory score") +
@@ -206,3 +252,41 @@ b_c_mem_score_ANOVA <- anovaBF(formula = mem_score ~ certainty*predictiveness + 
 b_c_mem_score_ANOVA_int <- b_c_mem_score_ANOVA[4] / b_c_mem_score_ANOVA[3]
 ```
 However, in the knights there are no significant effects with bayesian evidence ranging from anecdotal to moderate in favor of the null hypothesis (Certainty: `r apa(c_mem_score_test_ANOVA, effect = "certainty")`, `r report_BF_and_error(b_c_mem_score_ANOVA[1])`; Predictiveness: `r apa(c_mem_score_test_ANOVA, effect = "predictiveness")`, , `r report_BF_and_error(b_c_mem_score_ANOVA[2])`; interaction: `r apa(c_mem_score_test_ANOVA, effect = "certainty:predictiveness")`, , `r report_BF_and_error(b_c_mem_score_ANOVA_int[1])`).
+
+### Accuracy
+``` {r, include=FALSE}
+#prepare data for plotting
+mean_acc_test <- test_data %>%
+  group_by(cue_type, certainty) %>%
+  summarise(mean_acc = mean(acc, na.rm = TRUE), 
+           se_acc = sd(acc, na.rm = TRUE)/sqrt(length(acc)))
+```
+``` {r, echo=FALSE}
+ggplot(mean_acc_test) +
+  geom_col(mapping = aes(x = cue_type, y = mean_acc, fill = certainty))+
+  geom_errorbar(mapping = aes(x = cue_type, y = mean_acc, ymin = mean_acc- se_acc, ymax = mean_acc + se_acc))+
+  coord_cartesian(ylim = c(0,1))+
+  scale_x_discrete(name = "Type of cue") +
+  scale_y_continuous(name = "Accuracy")+
+  labs(title = "Mean corrected memory score for each type of cue")
+```
+```{r, include=FALSE}
+#prepare for ANOVA
+acc_test <- test_data %>%
+  group_by(pNum, predictiveness, certainty) %>%
+  summarise(acc = mean(acc, na.rm = TRUE))
+#factorise everything
+acc_test$pNum <-  factor(acc_test$pNum)
+acc_test$certainty <- factor(acc_test$certainty)
+acc_test$predictiveness <- factor(acc_test$predictiveness)
+#ANOVA
+acc_test_ANOVA <- aov_car(acc ~ Error(pNum*certainty*predictiveness), data = acc_test)
+print(acc_test_ANOVA)
+#bayesian ANOVA
+b_acc_test_ANOVA <- anovaBF(acc ~ certainty*predictiveness + pNum, data = acc_test, whichRandom = "pNum")
+print(b_c_mem_score_ANOVA)
+#bayesian interaction
+b_acc_test_ANOVA_int <- b_acc_test_ANOVA[4]/b_acc_test_ANOVA[3]
+print(b_acc_test_ANOVA_int)
+```
+A repeated measures ANOVA found no significant effects nor interaction. The bayesian evidence was moderate null for Certainty (` r apa(acc_test_ANOV, effect = "certainty")`, `r report_BF_and_error(b_acc_test_ANOVA[1])`), anecdotal null for Predictiveness (`r apa(acc_test_ANOVA, effect = "predictiveness")`, `r report_BF_and_error(b_acc_test_ANOVA[2])`), and anecdotal alternative for the interaction (`r apa(acc_test_ANOVA, effect = "certainty:predictiveness")`, `r report_BF_and_error(b_acc_test_ANOVA_int[1])`).
